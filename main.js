@@ -3,7 +3,8 @@
         let timeLeft = 180; // 3 minutes
         let wiresCut = 0;
         let gameOver = false;
-        const wireOrder = ['red', 'blue', 'green', 'yellow'];
+        const COLORS = ['red', 'blue', 'green', 'yellow'];
+        let wireOrder = [];
         let nextWireIndex = 0;
         
         const wireColors = {
@@ -12,6 +13,17 @@
             green: 0x00ff00,
             yellow: 0xffff00
         };
+
+        function shuffleArray(arr) {
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        // choose a random order for the wire-cutting sequence
+        wireOrder = shuffleArray(COLORS.slice());
 
         init();
         animate();
@@ -114,12 +126,28 @@
             let mouseX = 0;
             let isDragging = false;
             let lastTouchX = 0;
+            let lastMouseX = 0;
+            let dragSpeed = 6; // higher = stronger drag effect
 
-            // Desktop mouse controls
+            // Desktop mouse drag controls (click-and-hold to drag)
+            renderer.domElement.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return; // only react to left button
+                isDragging = true;
+                lastMouseX = e.clientX;
+                e.preventDefault();
+            });
+
+            window.addEventListener('mouseup', (e) => {
+                if (e.button !== 0) return;
+                isDragging = false;
+            });
+
             document.addEventListener('mousemove', (e) => {
-                mouseX = (e.clientX / window.innerWidth) * 2 - 1;
-                camera.position.x = mouseX * 0.5;
-                camera.lookAt(0, 0, 0);
+                if (!isDragging) return;
+                const delta = (e.clientX - lastMouseX) / window.innerWidth;
+                bomb.rotation.y += delta * dragSpeed;
+                lastMouseX = e.clientX;
+                e.preventDefault();
             });
 
             // Mobile touch controls
@@ -131,13 +159,10 @@
             });
 
             container.addEventListener('touchmove', (e) => {
-                if (isDragging) {
+                if (isDragging && e.touches.length > 0) {
                     const touchX = e.touches[0].clientX;
-                    const delta = (touchX - lastTouchX) / window.innerWidth;
-                    mouseX -= delta * 2; // Reversed direction
-                    mouseX = Math.max(-1, Math.min(1, mouseX));
-                    camera.position.x = mouseX * 0.5;
-                    camera.lookAt(0, 0, 0);
+                    const delta = (touchX - lastTouchX) / container.clientWidth;
+                    bomb.rotation.y += delta * dragSpeed;
                     lastTouchX = touchX;
                     e.preventDefault();
                 }
@@ -187,6 +212,12 @@
             onWindowResize();
 
             // Start timer
+            // Update on-screen instructions to match randomized wire order
+            ['wire1', 'wire2', 'wire3', 'wire4'].forEach((id, i) => {
+                const el = document.getElementById(id);
+                if (el && wireOrder[i]) el.textContent = `${i + 1}. ${wireOrder[i].toUpperCase()}`;
+            });
+
             setInterval(updateTimer, 1000);
         }
 
@@ -256,8 +287,7 @@
             requestAnimationFrame(animate);
 
             if (!gameOver) {
-                bomb.rotation.y += 0.002;
-                
+                // Bomb rotation is now user-controlled via drag; no auto-rotation here.
                 // Pulsing effect on active wire
                 if (nextWireIndex < wires.length) {
                     const activeWire = wires.find(w => w.userData.color === wireOrder[nextWireIndex]);
